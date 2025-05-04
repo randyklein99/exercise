@@ -1,0 +1,23 @@
+# Python virtual environment
+.venv
+
+# Visual Studio Code settings
+.vscode/
+
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Other common Python ignores
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+
+# Miscellaneous
+*.log
+*.tmp
+*.swp
