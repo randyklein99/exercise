@@ -1,0 +1,53 @@
+# 6-Day Workout Routine
+
+Each session starts with one compound exercise, followed by additional sets to target specific muscle groups.
+
+## Day 1: 4 Exercises
+- **Straight Sets (Compound First)**: Incline Bench Press - 5 sets of 8-12 reps *(Chest, Triceps, Front Delts, isometric: Lower Back)*
+- **Straight Sets**: Front Raise - 5 sets of 8-12 reps *(Front Delts, isometric: Biceps)*
+- **Straight Sets**: Lateral Raise - 3 sets of 8-12 reps *(Lateral Delts)*
+- **Straight Sets**: Leg Extension - 4 sets of 8-12 reps *(Quads, Rectus Femoris)*
+- **Time Estimate**: 34 minutes
+
+## Day 2: 1 Exercises
+- **Straight Sets (Compound First)**: Pulldown - 3 sets of 8-12 reps *(Lats, Biceps, secondary: Lower Traps, Rear Delts)*
+- **Time Estimate**: 6 minutes
+
+## Day 3: 1 Exercises
+- **Straight Sets (Compound First)**: Stiff-Legged Deadlift - 4 sets of 8-12 reps *(Hamstrings, Glutes, secondary: Lower Back, isometric: Lower Back, Upper Traps)*
+- **Time Estimate**: 8 minutes
+
+## Day 4: 5 Exercises
+- **Straight Sets (Compound First)**: Incline Bench Press - 2 sets of 8-12 reps *(Chest, Triceps, Front Delts, isometric: Lower Back)*
+- **Straight Sets**: Front Raise - 4 sets of 8-12 reps *(Front Delts, isometric: Biceps)*
+- **Straight Sets**: Lateral Raise - 3 sets of 8-12 reps *(Lateral Delts)*
+- **Straight Sets**: Leg Extension - 4 sets of 8-12 reps *(Quads, Rectus Femoris)*
+- **Straight Sets**: Cable Curl - 5 sets of 8-12 reps *(Biceps)*
+- **Time Estimate**: 36 minutes
+
+## Day 5: 1 Exercises
+- **Straight Sets (Compound First)**: Upper Back Rows - 2 sets of 8-12 reps *(Mid Traps, Rear Delts, secondary: Lats, Biceps, isometric: Lower Back)*
+- **Time Estimate**: 4 minutes
+
+## Day 6: 1 Exercises
+- **Straight Sets (Compound First)**: Stiff-Legged Deadlift - 2 sets of 8-12 reps *(Hamstrings, Glutes, secondary: Lower Back, isometric: Lower Back, Upper Traps)*
+- **Time Estimate**: 4 minutes
+
+## Weekly Volume Breakdown
+- **Rear Delts**: 3.50 sets (12–18 sets – below target)
+- **Mid Traps**: 2.00 sets (8–14 sets – below target)
+- **Lateral Delts**: 6.00 sets (12–18 sets – below target)
+- **Glutes**: 6.00 sets (12–18 sets – not optimized)
+- **Triceps**: 7.00 sets (10–16 sets – below target)
+- **Short Head**: 0.00 sets (10–16 sets – below target)
+- **Chest**: 7.00 sets (12–18 sets – below target)
+- **Lats**: 4.00 sets (14–20 sets – below target)
+- **Hamstrings**: 6.00 sets (10–16 sets – below target)
+- **Long Head**: 0.00 sets (10–16 sets – below target)
+- **Lower Traps**: 1.50 sets (14–20 sets – below target)
+- **Lower Back**: 6.75 sets (12–18 sets – not optimized)
+- **Biceps**: 11.25 sets (14–20 sets – below target)
+- **Rectus Femoris**: 8.00 sets (12–18 sets – below target)
+- **Quads**: 8.00 sets (12–18 sets – below target)
+- **Upper Traps**: 1.50 sets (8–14 sets – below target)
+- **Front Delts**: 16.00 sets (8–14 sets – exceeds upper bound)
