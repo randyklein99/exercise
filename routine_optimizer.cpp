@@ -57,7 +57,7 @@ map<string, double> compute_volumes(const vector<vector<RoutineEntry>>& routine,
     return volumes;
 }
 
-// Function to calculate the cost of a routine
+// Function to calculate the cost of a routine with stricter penalties
 double compute_cost(const vector<vector<RoutineEntry>>& routine, 
                     const unordered_map<string, MuscleGroup>& mav_targets, 
                     const vector<Exercise>& exercises) {
@@ -68,8 +68,10 @@ double compute_cost(const vector<vector<RoutineEntry>>& routine,
     double frequency_penalty = 0.0;
     double time_variance_penalty = 0.0;
     double compound_first_penalty = 0.0;
+    double inclusion_penalty = 0.0;
 
     vector<double> day_times(TOTAL_DAYS, 0.0);
+    set<string> included_exercises;
 
     for (int day = 0; day < TOTAL_DAYS; ++day) {
         set<string> day_exercises;
@@ -82,6 +84,7 @@ double compute_cost(const vector<vector<RoutineEntry>>& routine,
                 return numeric_limits<double>::max();  // Penalize repeats within a day
             }
             day_exercises.insert(entry.exercise);
+            included_exercises.insert(entry.exercise);
             exercise_frequency[entry.exercise]++;
             auto ex = find_if(exercises.begin(), exercises.end(), 
                             [&](const Exercise& e) { return e.name == entry.exercise; });
@@ -92,90 +95,82 @@ double compute_cost(const vector<vector<RoutineEntry>>& routine,
             }
         }
         if (!compound_first) {
-            compound_first_penalty += 25000.0;  // Heavy penalty for no compound first
+            compound_first_penalty += 30000.0;  // High penalty for no compound first
         }
         if (routine[day].size() < MIN_EXERCISES_PER_DAY || routine[day].size() > MAX_EXERCISES_PER_DAY || leg_exercises > 1) {
             return numeric_limits<double>::max();  // Penalize invalid counts or too many leg exercises
         }
         if (day_time > MAX_TIME_PER_DAY) {
-            total_time_penalty += 1000.0 * (day_time - MAX_TIME_PER_DAY);
+            total_time_penalty += 2000.0 * (day_time - MAX_TIME_PER_DAY);
         }
         day_times[day] = day_time;
+    }
+
+    // Inclusion penalty for missing Leg Curls
+    if (included_exercises.find("Leg Curl") == included_exercises.end()) {
+        inclusion_penalty += 50000.0;  // Heavy penalty for missing Leg Curls
     }
 
     double avg_time = accumulate(day_times.begin(), day_times.end(), 0.0) / TOTAL_DAYS;
     for (double time : day_times) {
         time_variance_penalty += pow(time - avg_time, 2);
     }
-    time_variance_penalty *= 300.0;  // Tighten time equivalence
+    time_variance_penalty *= 500.0;  // Tighten time equivalence
 
     for (const auto& [muscle, target] : mav_targets) {
         if (muscle == "Glutes" || muscle == "Lower Back") continue;  // Exclude from optimization
         double vol = volumes.count(muscle) ? volumes[muscle] : 0.0;
-        double deficit = max(0.0, target.target - vol);
-        volume_penalty += 2000.0 * pow(deficit, 2);  // Increased penalty for under-target
-        if (vol > target.upper_bound) {
-            volume_penalty += 20.0 * pow(vol - target.upper_bound, 2);
+        if (vol < target.target) {
+            double weight = (muscle == "Short Head" || muscle == "Lower Traps") ? 5000.0 : 2000.0;
+            volume_penalty += weight * pow(target.target - vol, 2);  // Stricter for critical muscles
+        } else if (vol > target.upper_bound) {
+            volume_penalty += 50.0 * pow(vol - target.upper_bound, 2);
         }
     }
 
     for (const auto& [ex, freq] : exercise_frequency) {
         if (freq > 2) {
-            frequency_penalty += 6000.0 * (freq - 2);  // Stronger penalty for overuse
+            frequency_penalty += 6000.0 * (freq - 2);  // High penalty for overuse
         }
     }
 
-    return volume_penalty + frequency_penalty + total_time_penalty + time_variance_penalty + compound_first_penalty;
+    return volume_penalty + frequency_penalty + total_time_penalty + time_variance_penalty + compound_first_penalty + inclusion_penalty;
 }
 
-// Function to perturb the routine
+// Function to perturb the routine with bolder modifications
 void perturb_routine(vector<vector<RoutineEntry>>& routine, 
                      const vector<Exercise>& exercises, 
                      const unordered_map<string, MuscleGroup>& mav_targets,
                      mt19937& gen) {
     uniform_int_distribution<> day_dist(0, TOTAL_DAYS - 1);
-    uniform_int_distribution<> action_dist(0, 2);  // 0: remove, 1: replace, 2: add
-    int day = day_dist(gen);
+    uniform_int_distribution<> action_dist(0, 3);  // 0: remove, 1: replace, 2: add, 3: swap days
     int action = action_dist(gen);
 
     auto volumes = compute_volumes(routine, exercises);
-    vector<pair<string, double>> muscle_deficits;
+    vector<string> under_target_muscles;
     for (const auto& [muscle, target] : mav_targets) {
         double vol = volumes.count(muscle) ? volumes[muscle] : 0.0;
-        double deficit = target.target - vol;
-        if (deficit > 0) muscle_deficits.push_back({muscle, deficit});
-    }
-    sort(muscle_deficits.begin(), muscle_deficits.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;  // Prioritize largest deficits
-    });
-
-    // Ensure Leg Curls are considered for Short Head
-    bool short_head_deficit = false;
-    for (const auto& [muscle, deficit] : muscle_deficits) {
-        if (muscle == "Short Head" && deficit > 0) {
-            short_head_deficit = true;
-            break;
-        }
+        if (vol < target.target) under_target_muscles.push_back(muscle);
     }
 
-    if (action == 0 && routine[day].size() > MIN_EXERCISES_PER_DAY) {  // Remove
+    if (action == 0 && routine[day_dist(gen)].size() > MIN_EXERCISES_PER_DAY) {  // Remove
+        int day = day_dist(gen);
         uniform_int_distribution<> ex_dist(1, routine[day].size() - 1);  // Protect compound first
         routine[day].erase(routine[day].begin() + ex_dist(gen));
-    } else if (action == 1 && !routine[day].empty()) {  // Replace
+    } else if (action == 1 && !routine[day_dist(gen)].empty()) {  // Replace
+        int day = day_dist(gen);
         uniform_int_distribution<> idx_dist(1, routine[day].size() - 1);  // Protect compound first
         int idx = idx_dist(gen);
         set<string> current_exercises;
         int leg_count = 0;
-        double day_time = 0.0;
         for (const auto& entry : routine[day]) {
             current_exercises.insert(entry.exercise);
             auto ex = find_if(exercises.begin(), exercises.end(), [&](const Exercise& e) { return e.name == entry.exercise; });
             if (ex != exercises.end() && ex->is_leg) leg_count++;
-            day_time += entry.sets * TIME_PER_SET;
         }
         vector<Exercise> candidates;
         for (const auto& ex : exercises) {
-            if (!current_exercises.count(ex.name) && (!ex.is_leg || leg_count == 0) && !ex.is_compound) {
+            if (!current_exercises.count(ex.name) && (!ex.is_leg || leg_count == 0) && !ex.is_compound) {  // Avoid compounds mid-routine
                 bool valid = true;
                 for (const auto& muscle : ex.primary) {
                     if (is_muscle_recently_used(routine, day, muscle, exercises)) {
@@ -183,39 +178,31 @@ void perturb_routine(vector<vector<RoutineEntry>>& routine,
                         break;
                     }
                 }
-                if (valid) {
-                    if (short_head_deficit && ex.name == "Leg Curl") {
-                        candidates.insert(candidates.begin(), ex);  // Prioritize Leg Curl
-                    } else {
-                        for (const auto& [muscle, _] : muscle_deficits) {
-                            if (find(ex.primary.begin(), ex.primary.end(), muscle) != ex.primary.end()) {
-                                candidates.push_back(ex);
-                                break;
-                            }
-                        }
-                    }
+                if (valid && any_of(ex.primary.begin(), ex.primary.end(), [&](const string& m) {
+                    return find(under_target_muscles.begin(), under_target_muscles.end(), m) != under_target_muscles.end();
+                })) {
+                    candidates.push_back(ex);
                 }
             }
         }
         if (!candidates.empty()) {
             uniform_int_distribution<> new_ex_dist(0, candidates.size() - 1);
             routine[day][idx].exercise = candidates[new_ex_dist(gen)].name;
-            uniform_int_distribution<> sets_dist(MIN_SETS, day_time < 28 ? 5 : MAX_SETS);  // Favor higher sets if time allows
+            uniform_int_distribution<> sets_dist(MIN_SETS, MAX_SETS);
             routine[day][idx].sets = sets_dist(gen);
         }
-    } else if (action == 2 && routine[day].size() < MAX_EXERCISES_PER_DAY) {  // Add
+    } else if (action == 2 && routine[day_dist(gen)].size() < MAX_EXERCISES_PER_DAY) {  // Add
+        int day = day_dist(gen);
         set<string> current_exercises;
         int leg_count = 0;
-        double day_time = 0.0;
         for (const auto& entry : routine[day]) {
             current_exercises.insert(entry.exercise);
             auto ex = find_if(exercises.begin(), exercises.end(), [&](const Exercise& e) { return e.name == entry.exercise; });
             if (ex != exercises.end() && ex->is_leg) leg_count++;
-            day_time += entry.sets * TIME_PER_SET;
         }
         vector<Exercise> candidates;
         for (const auto& ex : exercises) {
-            if (!current_exercises.count(ex.name) && (!ex.is_leg || leg_count == 0) && !ex.is_compound) {
+            if (!current_exercises.count(ex.name) && (!ex.is_leg || leg_count == 0) && !ex.is_compound) {  // Avoid compounds mid-routine
                 bool valid = true;
                 for (const auto& muscle : ex.primary) {
                     if (is_muscle_recently_used(routine, day, muscle, exercises)) {
@@ -223,32 +210,28 @@ void perturb_routine(vector<vector<RoutineEntry>>& routine,
                         break;
                     }
                 }
-                if (valid) {
-                    if (short_head_deficit && ex.name == "Leg Curl") {
-                        candidates.insert(candidates.begin(), ex);  // Prioritize Leg Curl
-                    } else if (ex.name == "Lateral Raise" && day_time < 30 && volumes["Lateral Delts"] < 12) {
-                        candidates.insert(candidates.begin(), ex);  // Boost Lateral Raise if under target
-                    } else {
-                        for (const auto& [muscle, _] : muscle_deficits) {
-                            if (find(ex.primary.begin(), ex.primary.end(), muscle) != ex.primary.end()) {
-                                candidates.push_back(ex);
-                                break;
-                            }
-                        }
-                    }
+                if (valid && any_of(ex.primary.begin(), ex.primary.end(), [&](const string& m) {
+                    return find(under_target_muscles.begin(), under_target_muscles.end(), m) != under_target_muscles.end();
+                })) {
+                    candidates.push_back(ex);
                 }
             }
         }
         if (!candidates.empty()) {
             uniform_int_distribution<> ex_dist(0, candidates.size() - 1);
             string new_ex = candidates[ex_dist(gen)].name;
-            uniform_int_distribution<> sets_dist(MIN_SETS, day_time < 28 ? 5 : MAX_SETS);  // Favor higher sets if time allows
+            uniform_int_distribution<> sets_dist(MIN_SETS, MAX_SETS);
             routine[day].push_back({new_ex, sets_dist(gen)});
         }
+    } else if (action == 3 && TOTAL_DAYS > 1) {  // Swap entire days
+        int day1 = day_dist(gen);
+        int day2 = day_dist(gen);
+        while (day2 == day1) day2 = day_dist(gen);
+        swap(routine[day1], routine[day2]);
     }
 }
 
-// Function to initialize a routine
+// Function to initialize a routine with diverse exercises
 vector<vector<RoutineEntry>> initialize_routine(const vector<Exercise>& exercises, mt19937& gen) {
     vector<vector<RoutineEntry>> routine(TOTAL_DAYS);
     vector<Exercise> compounds;
@@ -266,7 +249,6 @@ vector<vector<RoutineEntry>> initialize_routine(const vector<Exercise>& exercise
 
         // Start with a compound exercise
         shuffle(compounds.begin(), compounds.end(), gen);
-        bool compound_added = false;
         for (const auto& ex : compounds) {
             if (used_exercises.insert(ex.name).second && (!ex.is_leg || leg_count == 0)) {
                 bool valid = true;
@@ -280,19 +262,13 @@ vector<vector<RoutineEntry>> initialize_routine(const vector<Exercise>& exercise
                     uniform_int_distribution<> sets_dist(MIN_SETS, MAX_SETS);
                     routine[day].push_back({ex.name, sets_dist(gen)});
                     if (ex.is_leg) leg_count++;
-                    compound_added = true;
                     break;
                 }
             }
         }
-        if (!compound_added) {
-            routine[day].push_back({compounds[0].name, MIN_SETS});
-            if (compounds[0].is_leg) leg_count++;
-        }
 
-        // Add isolation exercises, ensuring Leg Curl is included at least once
+        // Add isolation exercises, ensuring diversity
         shuffle(isolations.begin(), isolations.end(), gen);
-        bool leg_curl_added = false;
         for (int i = 0; i < isolation_dist(gen) && i < isolations.size(); ++i) {
             if (used_exercises.insert(isolations[i].name).second && (!isolations[i].is_leg || leg_count == 0)) {
                 bool valid = true;
@@ -305,33 +281,15 @@ vector<vector<RoutineEntry>> initialize_routine(const vector<Exercise>& exercise
                 if (valid) {
                     uniform_int_distribution<> sets_dist(MIN_SETS, MAX_SETS);
                     routine[day].push_back({isolations[i].name, sets_dist(gen)});
-                    if (isolations[i].name == "Leg Curl") leg_curl_added = true;
                     if (isolations[i].is_leg) leg_count++;
                 }
             }
         }
 
-        // Force Leg Curl if Short Head is a concern
-        if (!leg_curl_added && day == 0) {  // Add on Day 1 if not already included
-            auto leg_curl = find_if(isolations.begin(), isolations.end(), [](const Exercise& e) { return e.name == "Leg Curl"; });
-            if (leg_curl != isolations.end() && used_exercises.insert(leg_curl->name).second && leg_count == 0) {
-                bool valid = true;
-                for (const auto& muscle : leg_curl->primary) {
-                    if (is_muscle_recently_used(routine, day, muscle, exercises)) {
-                        valid = false;
-                        break;
-                    }
-                }
-                if (valid) {
-                    routine[day].push_back({leg_curl->name, 4});  // Start with 4 sets
-                    leg_count++;
-                }
-            }
-        }
-
-        while (routine[day].size() < MIN_EXERCISES_PER_DAY && !isolations.empty()) {
-            shuffle(isolations.begin(), isolations.end(), gen);
-            for (const auto& ex : isolations) {
+        while (routine[day].size() < MIN_EXERCISES_PER_DAY && (!isolations.empty() || !compounds.empty())) {
+            vector<Exercise>& source = isolations.empty() ? compounds : isolations;
+            shuffle(source.begin(), source.end(), gen);
+            for (const auto& ex : source) {
                 if (used_exercises.insert(ex.name).second && (!ex.is_leg || leg_count == 0)) {
                     bool valid = true;
                     for (const auto& muscle : ex.primary) {
@@ -350,6 +308,23 @@ vector<vector<RoutineEntry>> initialize_routine(const vector<Exercise>& exercise
             }
         }
     }
+
+    // Ensure Leg Curls are included in the initial routine
+    bool has_leg_curls = false;
+    for (const auto& day : routine) {
+        for (const auto& entry : day) {
+            if (entry.exercise == "Leg Curl") {
+                has_leg_curls = true;
+                break;
+            }
+        }
+        if (has_leg_curls) break;
+    }
+    if (!has_leg_curls) {
+        int day = uniform_int_distribution<>(0, TOTAL_DAYS - 1)(gen);
+        routine[day].push_back({"Leg Curl", uniform_int_distribution<>(MIN_SETS, MAX_SETS)(gen)});
+    }
+
     return routine;
 }
 
@@ -466,7 +441,7 @@ vector<vector<RoutineEntry>> optimize_routine(const vector<Exercise>& exercises,
     double best_cost = compute_cost(routine, mav_targets, exercises);
     vector<vector<RoutineEntry>> best_routine = routine;
 
-    for (int iter = 0; iter < 30000; ++iter) {  // Increased iterations for better optimization
+    for (int iter = 0; iter < 30000; ++iter) {  // Increased iterations for better exploration
         vector<vector<RoutineEntry>> new_routine = routine;
         perturb_routine(new_routine, exercises, mav_targets, gen);
         double new_cost = compute_cost(new_routine, mav_targets, exercises);
